@@ -16,11 +16,9 @@ getIndex (Dummy)          = 0
 
 data Parse = Parse
     { pId      :: Int
-    , pWords   :: [Word]
-    , pRelns   :: [Relation]
-    , pDepcs   :: [Dependency]
-    , pDepGr   :: DotGraph Node
-    , pRelGr   :: DotGraph Node
+    , pWords   :: [LNode Word]
+    , pRels    :: [LEdge String]
+    , pDeps    :: [LEdge String]
     } deriving Show
 
 data Sentence = Sentence
@@ -28,9 +26,6 @@ data Sentence = Sentence
     , sSurface :: String
     , sParses  :: [Parse]
     } deriving Show
-
-data Dependency = Link     String (Word,Word) deriving Show
-data Relation   = Relation String (Word,Word) deriving Show
 
 data ParseResult = ParseResult
     { prParserName :: String

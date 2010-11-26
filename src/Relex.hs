@@ -31,10 +31,14 @@ printASentence (Sentence i s ps) = do
     putStrLn $ "\t" ++ show s
     putStrLn $ "\tNumber of parses: " ++ (show.length $ ps)
     mapM_ printaparse ps
-    where printaparse p = let fname = show i ++ "-" ++ show (pId p) ++ ".png"
-                          in do r1 <- runGraphviz (pDepGr p) Png ('d':fname)
-                                r2 <- runGraphviz (pRelGr p) Png ('r':fname)
-                                print $ (maybeErr r1,maybeErr r2)
+    where printaparse p = do putStrLn $ "\tParse #" ++ show (pId p)
+                             putStrLn $ "\tWords: " ++ show (pWords p)
+                             putStrLn $ "\tDependencies: " ++ show (pDeps p)
+                             putStrLn $ "\tRelations: " ++ show (pRels p)
+--  where printaparse p = let fname = show i ++ "-" ++ show (pId p) ++ ".png"
+--                        in do r1 <- runGraphviz (pDepGr p) Png ('d':fname)
+--                              r2 <- runGraphviz (pRelGr p) Png ('r':fname)
+--                              print $ (maybeErr r1,maybeErr r2)
 
 process :: (ArrowXml a) => a XmlTree ParseResult
 process = getChildren >>> proc nlparse -> do
@@ -56,55 +60,42 @@ sentenceParse = tag "parse" >>> proc p -> do
     ws      <- readWords.strip ^<< text <<< tag "features"  -< p
     rString <- strip           ^<< text <<< tag "relations" -< p
     dString <- strip           ^<< text <<< tag "links"     -< p
-    returnA -< let ws'    = Dummy:ws
-                   rels   = readRelns ws' rString
-                   deps   = readDepns ws' dString
-                   rGraph = makeGraph ws' (relToNode `map` rels)
-                   dGraph = makeGraph ws' (depToNode `map` deps)
-               in Parse parseId ws rels deps rGraph dGraph
+    returnA -< let rels   = readRelns rString
+                   deps   = readDepns dString
+               in Parse parseId ws rels deps
 
-makeGraph :: [Word] -> [LEdge String] -> DotGraph Node
-makeGraph ws es = graphToDot nonClusteredParams (mkGraph (wordToNode `map` ws) es :: Gr String String)
+-- makeGraph :: [Word] -> [LEdge String] -> DotGraph Node
+-- makeGraph ws es = graphToDot nonClusteredParams (mkGraph (wordToNode `map` ws) es :: Gr String String)
 
-relToNode :: Relation -> LEdge String
-relToNode (Relation s (w1,w2)) = (getIndex w1,getIndex w2,s)
-
-depToNode :: Dependency -> LEdge String
-depToNode (Link s (w1,w2)) = (getIndex w1,getIndex w2,s)
-
-wordToNode :: Word -> LNode String
-wordToNode (Word i s _ _ _) = (i,s)
-wordToNode (Dummy         ) = (0,"Root")
-
-readWords :: String -> [Word]
-readWords w = (lineToWord.split "\t") `map` lines w
-    where lineToWord (i:s:l:p:f:_) = Word (read i) s l p f
-          lineToWord (i:s:l:p:_) =   Word (read i) s l p "" -- Call me a lazy ass.
+readWords :: String -> [LNode Word]
+readWords w = (0,Dummy):((lineToWord.split "\t") `map` lines w)
+    where lineToWord (i:s:l:p:f:_) = let i' = read i in (i',Word i' s l p f)
+          lineToWord (i:s:l:p:_) =   let i' = read i in (i',Word i' s l p "") -- Call me a lazy ass.
           lineToWord x = error $ "Malformed Word!\n" ++ show x
 
-readRelns :: [Word] -> String -> [Relation]
-readRelns ws s = case parse (relation `sepBy` newline) "relations" s of
-                         Left e -> error $ "Failed to parse:\n" ++ show e
-                         Right rls -> rls
+readRelns :: String -> [LEdge String]
+readRelns s = case parse (relation `sepBy` newline) "relations" s of
+                   Left e -> error $ "Failed to parse:\n" ++ show e
+                   Right rls -> rls
     where relation = do name <- many1 (noneOf "(") <* many1 (noneOf "[")
-                        w1Id <- inBrackets readDigit
-                        w2Id <- many1 (noneOf "[") >> inBrackets readDigit <* many (noneOf "\n")
-                        return $ Relation name (ws!!w1Id,ws!!w2Id)
+                        w1Id <- inBrackets readNumber
+                        w2Id <- many1 (noneOf "[") >> inBrackets readNumber <* many (noneOf "\n")
+                        return $ (w1Id,w2Id,name)
 
-readDepns :: [Word] -> String -> [Dependency]
-readDepns ws s = case parse (dependency `sepBy` newline) "dependencies" s of
-                      Left e -> error $ "Failed to parse:\n" ++ show e
-                      Right deps -> deps
+readDepns :: String -> [LEdge String]
+readDepns s = case parse (dependency `sepBy` newline) "dependencies" s of
+                   Left e -> error $ "Failed to parse:\n" ++ show e
+                   Right deps -> deps
     where dependency = do name <- many1 (noneOf "(") <* char '('
-                          w1Id <- readDigit
-                          w2Id <- string ", " >> readDigit <* many (noneOf "\n")
-                          return $ Link name (ws!!w1Id,ws!!w2Id)
+                          w1Id <- readNumber
+                          w2Id <- string ", " >> readNumber <* many (noneOf "\n")
+                          return $ (w1Id,w2Id,name)
 
 inBrackets :: Parser a -> Parser a
 inBrackets p = char '[' *> p <* char ']'
 
-readDigit :: Parser Int
-readDigit = liftM read (many1 digit)
+readNumber :: Parser Int
+readNumber = liftM read (many1 digit)
 
 -- | Gets non-whitespace text from the node's children.
 text :: (ArrowXml a) => a XmlTree String
