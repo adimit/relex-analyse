@@ -37,26 +37,23 @@ printASentence (Sentence i s ps) = do
                                  ds = pDeps p
                                  id = pId p
                              putStrLn $ "\tParse #" ++ show id
-                             putStrLn $ "\tWords: " ++ show ws
-                             putStrLn $ "\tDependencies: " ++ show ds
-                             putStrLn $ "\tRelations: " ++ show rs
                              r1 <- runGraphviz (makeAGraph ds ws) Png (makeName i id "deps")
                              r2 <- runGraphviz (makeAGraph rs ws) Png (makeName i id "rels")
                              print $ (maybeErr r1,maybeErr r2)
---  where printaparse p = let fname = show i ++ "-" ++ show (pId p) ++ ".png"
---                        in do r1 <- runGraphviz (pDepGr p) Png ('d':fname)
---                              r2 <- runGraphviz (pRelGr p) Png ('r':fname)
---                              print $ (maybeErr r1,maybeErr r2)
 
 makeName :: Int -> Int -> String -> FilePath
 makeName sId pId suffix = "s"++show sId++"p"++show pId++"-"++suffix++".png"
 
 makeAGraph :: [LEdge String] -> [LNode Word] -> DotGraph Int
-makeAGraph es ws = graphToDot nonClusteredParams (mkGraph ws' es :: Gr Word String)
+makeAGraph es ws = graphToDot ps (mkGraph ws' es :: Gr Word String)
     where ws' = necessaryWords es ws
+          ps = nonClusteredParams { isDirected = True
+                                  , fmtNode = \(_,w) -> [Label $ StrLabel (show w)]
+                                  , fmtEdge = \(_,_,s) -> [Label $ StrLabel s]
+                                  }
 
 necessaryWords :: [LEdge String] -> [LNode Word] -> [LNode Word]
-necessaryWords es words = filter isNecessary words
+necessaryWords es = filter isNecessary
     where isNecessary (i,_) = S.member i wordsUsedinEdges
           wordsUsedinEdges = foldr (\(i,j,_) s -> S.insert j $ S.insert i s) S.empty es
 
@@ -85,13 +82,10 @@ sentenceParse = tag "parse" >>> proc p -> do
                    deps   = readDepns dString
                in Parse parseId ws rels deps
 
--- makeGraph :: [Word] -> [LEdge String] -> DotGraph Node
--- makeGraph ws es = graphToDot nonClusteredParams (mkGraph (wordToNode `map` ws) es :: Gr String String)
-
 readWords :: String -> [LNode Word]
 readWords w = (0,Dummy):((lineToWord.split "\t") `map` lines w)
     where lineToWord (i:s:l:p:f:_) = let i' = read i in (i',Word i' s l p f)
-          lineToWord (i:s:l:p:_) =   let i' = read i in (i',Word i' s l p "") -- Call me a lazy ass.
+          lineToWord (i:s:l:p:_) =   let i' = read i in (i',Word i' s l p "")
           lineToWord x = error $ "Malformed Word!\n" ++ show x
 
 readRelns :: String -> [LEdge String]
