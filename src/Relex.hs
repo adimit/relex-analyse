@@ -24,7 +24,6 @@ main = do (f:_) <- getArgs
           putStrLn $ "\tparser used: " ++ prParserName pr
           putStrLn $ "\tparse date : " ++ prParseDate pr
           mapM_ printASentence (prResult pr)
-          return ()
 
 printASentence :: Sentence -> IO ()
 printASentence (Sentence i s ps) = do 
