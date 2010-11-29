@@ -11,6 +11,7 @@ import Data.String.Utils (strip)
 import Data.List.Utils (split)
 import Text.ParserCombinators.Parsec hiding ((<|>))
 import Control.Monad (liftM)
+import qualified Data.Set as S
 
 import Data.GraphViz
 import Data.Graph.Inductive.Graph
@@ -31,14 +32,34 @@ printASentence (Sentence i s ps) = do
     putStrLn $ "\t" ++ show s
     putStrLn $ "\tNumber of parses: " ++ (show.length $ ps)
     mapM_ printaparse ps
-    where printaparse p = do putStrLn $ "\tParse #" ++ show (pId p)
-                             putStrLn $ "\tWords: " ++ show (pWords p)
-                             putStrLn $ "\tDependencies: " ++ show (pDeps p)
-                             putStrLn $ "\tRelations: " ++ show (pRels p)
+    where printaparse p = do let ws = pWords p
+                                 rs = pRels p
+                                 ds = pDeps p
+                                 id = pId p
+                             putStrLn $ "\tParse #" ++ show id
+                             putStrLn $ "\tWords: " ++ show ws
+                             putStrLn $ "\tDependencies: " ++ show ds
+                             putStrLn $ "\tRelations: " ++ show rs
+                             r1 <- runGraphviz (makeAGraph ds ws) Png (makeName i id "deps")
+                             r2 <- runGraphviz (makeAGraph rs ws) Png (makeName i id "rels")
+                             print $ (maybeErr r1,maybeErr r2)
 --  where printaparse p = let fname = show i ++ "-" ++ show (pId p) ++ ".png"
 --                        in do r1 <- runGraphviz (pDepGr p) Png ('d':fname)
 --                              r2 <- runGraphviz (pRelGr p) Png ('r':fname)
 --                              print $ (maybeErr r1,maybeErr r2)
+
+makeName :: Int -> Int -> String -> FilePath
+makeName sId pId suffix = "s"++show sId++"p"++show pId++"-"++suffix++".png"
+
+makeAGraph :: [LEdge String] -> [LNode Word] -> DotGraph Int
+makeAGraph es ws = graphToDot nonClusteredParams (mkGraph ws' es :: Gr Word String)
+    where ws' = necessaryWords es ws
+
+necessaryWords :: [LEdge String] -> [LNode Word] -> [LNode Word]
+necessaryWords es words = filter isNecessary words
+    where isNecessary (i,_) = S.member i wordsUsedinEdges
+          wordsUsedinEdges = foldr (\(i,j,_) s -> S.insert j $ S.insert i s) S.empty es
+
 
 process :: (ArrowXml a) => a XmlTree ParseResult
 process = getChildren >>> proc nlparse -> do

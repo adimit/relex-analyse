@@ -11,6 +11,8 @@ data Word = Word { wIndex    :: Int
                  }
           | Dummy
 
+-- Maybe not necessary
+getIndex :: Word -> Int
 getIndex (Word i _ _ _ _) = i
 getIndex (Dummy)          = 0
 
