@@ -1,4 +1,4 @@
-{-# LANGUAGE Arrows #-}
+{-# LANGUAGE Arrows, OverloadedStrings #-}
 module Main where
 
 import Control.Applicative hiding (many, optional)
@@ -17,31 +17,53 @@ import Data.GraphViz
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.PatriciaTree
 
+import qualified Text.Blaze.Html5 as H
+import qualified Text.Blaze.Html5.Attributes as A
+import qualified Text.Blaze.Renderer.Utf8 as R
+import qualified Data.ByteString.Lazy as B
+import Text.Blaze.Html5 ((!))
+
+import GHC.Exts (IsString(..))
+
 main :: IO ()
 main = do (f:_) <- getArgs
           [pr] <- runX (readDocument [] f >>> process)
           putStrLn $ "Parse has " ++ (show.length $ prResult pr) ++ " sentences."
           putStrLn $ "\tparser used: " ++ prParserName pr
           putStrLn $ "\tparse date : " ++ prParseDate pr
-          mapM_ printASentence (prResult pr)
+          sentenceHtmls <- sequence $ map makeParseHtml (prResult pr)
+          B.writeFile "index.html" (R.renderHtml $ makeHtmlDoc sentenceHtmls)
 
-printASentence :: Sentence -> IO ()
-printASentence (Sentence i s ps) = do 
-    putStrLn $ "Sentence #" ++ show i
-    putStrLn $ "\t" ++ show s
-    putStrLn $ "\tNumber of parses: " ++ (show.length $ ps)
-    mapM_ printaparse ps
-    where printaparse p = do let ws = pWords p
-                                 rs = pRels p
-                                 ds = pDeps p
-                                 id = pId p
-                             putStrLn $ "\tParse #" ++ show id
-                             r1 <- runGraphviz (makeAGraph ds ws) Png (makeName i id "deps")
-                             r2 <- runGraphviz (makeAGraph rs ws) Png (makeName i id "rels")
-                             print $ (maybeErr r1,maybeErr r2)
+makeHtmlDoc :: [H.Html] -> H.Html
+makeHtmlDoc shs = H.docTypeHtml $ do
+    H.head $ do
+        H.title $ "Parse results"
+    H.body $ do
+        H.p "Parse results"
+        foldr (>>) (H.p "") shs
 
+makeParseHtml :: Sentence -> IO H.Html
+makeParseHtml (Sentence i s ps) = do
+    imgs <- sequence $ map printaparse ps
+    return $ do
+        H.p.H.string $ "Sentence #"++show i++": "++ s
+        foldr (>>) (H.p "") imgs
+    where printaparse (Parse pid ws rels deps) = do
+              let (f1,f2) = (makeName i pid "deps",makeName i pid "rels")
+              r1 <- runGraphviz (makeAGraph deps ws) Png f1
+              r2 <- runGraphviz (makeAGraph rels ws) Png f2
+              print (r1,r2)
+              return $ H.div $ do
+                H.p.H.string $ "Parse #"++show pid
+                H.p.H.string $ "Tokens: " ++ (unwords $ map (show.snd) ws)
+                H.div $ do
+                    H.p "Dependency graph"
+                    H.img ! A.src (fromString f1) ! A.alt (fromString $ "Dependency graph for " ++ s)
+                H.div $ do
+                    H.p "Relations"
+                    H.img ! A.src (fromString f2) ! A.alt (fromString $ "Relation graph for " ++ s)
 makeName :: Int -> Int -> String -> FilePath
-makeName sId pId suffix = "s"++show sId++"p"++show pId++"-"++suffix++".png"
+makeName sId pid suffix = "s"++show sId++"p"++show pid++"-"++suffix++".png"
 
 makeAGraph :: [LEdge String] -> [LNode Word] -> DotGraph Int
 makeAGraph es ws = graphToDot ps (mkGraph ws' es :: Gr Word String)

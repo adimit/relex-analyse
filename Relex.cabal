@@ -13,5 +13,5 @@ executable relex-viz
     hs-source-dirs: src
     ghc-options: -Wall -O2
     ghc-prof-options: -prof -auto-all
-    build-depends: hxt,graphviz, parsec, fgl, MissingH, hxt-charproperties, base < 5.0, containers
+    build-depends: hxt,graphviz, parsec, fgl, MissingH, hxt-charproperties, base < 5.0, containers, blaze-html, bytestring
 
