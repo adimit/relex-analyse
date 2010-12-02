@@ -1,6 +1,5 @@
 module Relex.Format where
 
-import Data.GraphViz
 import Data.Graph.Inductive.Graph
 
 data Word = Word { wIndex    :: Int
@@ -10,11 +9,6 @@ data Word = Word { wIndex    :: Int
                  , wFeatures :: String
                  }
           | Dummy
-
--- Maybe not necessary
-getIndex :: Word -> Int
-getIndex (Word i _ _ _ _) = i
-getIndex (Dummy)          = 0
 
 data Parse = Parse
     { pId      :: Int
@@ -36,6 +30,6 @@ data ParseResult = ParseResult
     } deriving Show
 
 instance Show Word where
-    show (Word idx sfc lmm pos ftr) =
+    show (Word idx sfc _ _ _) =
         sfc ++ "[" ++ show idx ++ "]"
     show Dummy = "0"
